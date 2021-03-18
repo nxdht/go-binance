@@ -94,6 +94,10 @@ type AccountAsset struct {
 	PositionInitialMargin  string `json:"positionInitialMargin"`
 	UnrealizedProfit       string `json:"unrealizedProfit"`
 	WalletBalance          string `json:"walletBalance"`
+
+	CrossWalletBalance string `json:"crossWalletBalance"`
+	CrossUnPnl         string `json:"crossUnPnl"`
+	AvailableBalance   string `json:"availableBalance"`
 }
 
 // AccountPosition define account position
