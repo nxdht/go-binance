@@ -12,6 +12,8 @@ import (
 const (
 	baseWsMainUrl    = "wss://fstream.binance.com/ws"
 	baseWsTestnetUrl = "wss://stream.binancefuture.com/ws"
+
+	compWsMainUrl = "wss://fstream.binance.com/stream?streams="
 )
 
 var (
@@ -455,6 +457,73 @@ func WsPartialDepthServe(symbol string, levels int, handler WsDepthHandler, errH
 // WsPartialDepthServeWithRate serve websocket partial depth handler with rate.
 func WsPartialDepthServeWithRate(symbol string, levels int, rate time.Duration, handler WsDepthHandler, errHandler ErrHandler) (doneC, stopC chan struct{}, err error) {
 	return wsPartialDepthServe(symbol, levels, &rate, handler, errHandler)
+}
+
+func WsPartialDepthServeWithRateMulti(symbols []string, levels int, rate time.Duration, handler WsDepthHandler, errHandler ErrHandler) (doneC, stopC chan struct{}, err error) {
+	if levels != 5 && levels != 10 && levels != 20 {
+		return nil, nil, errors.New("Invalid levels")
+	}
+	levelsStr := fmt.Sprintf("%d", levels)
+
+	var rateStr string
+	switch rate {
+	case 250 * time.Millisecond:
+		rateStr = ""
+	case 500 * time.Millisecond:
+		rateStr = "@500ms"
+	case 100 * time.Millisecond:
+		rateStr = "@100ms"
+	default:
+		return nil, nil, errors.New("Invalid rate")
+	}
+
+	if len(symbols) > 200 {
+		return nil, nil, errors.New("max 200 symbols")
+	}
+
+	var ss []string
+	for _, s := range symbols {
+		ss = append(ss, fmt.Sprintf("%s@depth%s%s", strings.ToLower(s), levelsStr, rateStr))
+	}
+
+	endpoint := fmt.Sprintf("%s%s", compWsMainUrl, strings.Join(ss, "/"))
+	cfg := newWsConfig(endpoint)
+	wsHandler := func(message []byte) {
+		j, err := newJSON(message)
+		if err != nil {
+			errHandler(err)
+			return
+		}
+		event := new(WsDepthEvent)
+		j = j.Get("data")
+		event.Event = j.Get("e").MustString()
+		event.Time = j.Get("E").MustInt64()
+		event.TransactionTime = j.Get("T").MustInt64()
+		event.Symbol = j.Get("s").MustString()
+		event.FirstUpdateID = j.Get("U").MustInt64()
+		event.LastUpdateID = j.Get("u").MustInt64()
+		event.PrevLastUpdateID = j.Get("pu").MustInt64()
+		bidsLen := len(j.Get("b").MustArray())
+		event.Bids = make([]Bid, bidsLen)
+		for i := 0; i < bidsLen; i++ {
+			item := j.Get("b").GetIndex(i)
+			event.Bids[i] = Bid{
+				Price:    item.GetIndex(0).MustString(),
+				Quantity: item.GetIndex(1).MustString(),
+			}
+		}
+		asksLen := len(j.Get("a").MustArray())
+		event.Asks = make([]Ask, asksLen)
+		for i := 0; i < asksLen; i++ {
+			item := j.Get("a").GetIndex(i)
+			event.Asks[i] = Ask{
+				Price:    item.GetIndex(0).MustString(),
+				Quantity: item.GetIndex(1).MustString(),
+			}
+		}
+		handler(event)
+	}
+	return wsServe(cfg, wsHandler, errHandler)
 }
 
 // WsDiffDepthServe serve websocket diff. depth handler.

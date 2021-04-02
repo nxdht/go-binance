@@ -96,8 +96,17 @@ func wsPartialDepthServe(endpoint string, symbol string, handler WsPartialDepthH
 	return wsServe(cfg, wsHandler, errHandler)
 }
 
+func WsCombinedPartialDepthServe100Ms(symbolLevels map[string]string, handler WsPartialDepthHandler, errHandler ErrHandler) (doneC, stopC chan struct{}, err error) {
+	temp := make(map[string]string)
+	for k, v := range symbolLevels {
+		temp[k] = v + "@100ms"
+	}
+	return WsCombinedPartialDepthServe(temp, handler, errHandler)
+}
+
 // WsCombinedPartialDepthServe is similar to WsPartialDepthServe, but it for multiple symbols
 func WsCombinedPartialDepthServe(symbolLevels map[string]string, handler WsPartialDepthHandler, errHandler ErrHandler) (doneC, stopC chan struct{}, err error) {
+
 	endpoint := getCombinedEndpoint()
 	for s, l := range symbolLevels {
 		endpoint += fmt.Sprintf("%s@depth%s", strings.ToLower(s), l) + "/"
