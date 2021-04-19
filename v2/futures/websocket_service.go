@@ -115,6 +115,43 @@ func WsMarkPriceServeWithRate(symbol string, rate time.Duration, handler WsMarkP
 	return wsMarkPriceServe(endpoint, handler, errHandler)
 }
 
+func WsMarkPriceServeWithRateMulti(symbols []string, rate time.Duration, handler WsMarkPriceHandler, errHandler ErrHandler) (doneC, stopC chan struct{}, err error) {
+	var rateStr string
+	switch rate {
+	case 3 * time.Second:
+		rateStr = ""
+	case 1 * time.Second:
+		rateStr = "@1s"
+	default:
+		return nil, nil, errors.New("Invalid rate")
+	}
+	var ss []string
+	for _, s := range symbols {
+		ss = append(ss, fmt.Sprintf("%s@markPrice%s", strings.ToLower(s), rateStr))
+	}
+
+	endpoint := fmt.Sprintf("%s%s", compWsMainUrl, strings.Join(ss, "/"))
+	cfg := newWsConfig(endpoint)
+	wsHandler := func(message []byte) {
+		j, err := newJSON(message)
+		if err != nil {
+			errHandler(err)
+			return
+		}
+		event := new(WsMarkPriceEvent)
+		j = j.Get("data")
+		event.Event = j.Get("e").MustString()
+		event.Time = j.Get("E").MustInt64()
+		event.Symbol = j.Get("s").MustString()
+		event.MarkPrice = j.Get("p").MustString()
+		event.IndexPrice = j.Get("i").MustString()
+		event.FundingRate = j.Get("r").MustString()
+		event.NextFundingTime = j.Get("T").MustInt64()
+		handler(event)
+	}
+	return wsServe(cfg, wsHandler, errHandler)
+}
+
 // WsAllMarkPriceEvent defines an array of websocket markPriceUpdate events.
 type WsAllMarkPriceEvent []*WsMarkPriceEvent
 
