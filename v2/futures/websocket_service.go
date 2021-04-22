@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unsafe"
 )
 
 // Endpoints
@@ -23,6 +24,8 @@ var (
 	WebsocketKeepalive = false
 	// UseTestnet switch all the WS streams from production to the testnet
 	UseTestnet = false
+
+	ErrInvalid = errors.New("invalid")
 )
 
 // getWsEndpoint return the base endpoint of the WS according the UseTestnet flag
@@ -405,6 +408,124 @@ func WsAllBookTickerServe(handler WsBookTickerHandler, errHandler ErrHandler) (d
 	return wsServe(cfg, wsHandler, errHandler)
 }
 
+type WsBookTickerEventMulti struct {
+	RecvTime     time.Time
+	Symbol       string
+	BestBidPrice string
+	BestBidQty   string
+	BestAskPrice string
+	BestAskQty   string
+}
+
+// WsBookTickerHandler handle websocket that pushes updates to the best bid or ask price or quantity in real-time for a specified symbol.
+type WsBookTickerHandlerMulti func(event *WsBookTickerEventMulti)
+
+func WsBookTickerServeMulti(symbols []string, handler WsBookTickerHandlerMulti, errHandler ErrHandler) (doneC, stopC chan struct{}, err error) {
+	if len(symbols) > 200 {
+		return nil, nil, errors.New("max 200 symbols")
+	}
+
+	var ss []string
+	for _, s := range symbols {
+		ss = append(ss, fmt.Sprintf("%s@bookTicker", strings.ToLower(s)))
+	}
+
+	endpoint := fmt.Sprintf("%s%s", compWsMainUrl, strings.Join(ss, "/"))
+	cfg := newWsConfig(endpoint)
+	wsHandler := func(b []byte) {
+		event := &WsBookTickerEventMulti{
+			RecvTime: time.Now(),
+		}
+
+		var found bool
+		var from, to int
+		for i := 0; i < len(b)-2; i++ {
+			if b[i] == '"' {
+				if b[i+1] == 's' && b[i+2] == '"' {
+					//symbol
+					from, to, i, found = findString(b, i+3)
+					if found {
+						event.Symbol = toString(b[from:to])
+					} else {
+						errHandler(ErrInvalid)
+						return
+					}
+				} else if b[i+1] == 'b' && b[i+2] == '"' {
+					//symbol
+					from, to, i, found = findString(b, i+3)
+					if found {
+						event.BestBidPrice = toString(b[from:to])
+					} else {
+						errHandler(ErrInvalid)
+						return
+					}
+				} else if b[i+1] == 'B' && b[i+2] == '"' {
+					//symbol
+					from, to, i, found = findString(b, i+3)
+					if found {
+						event.BestBidQty = toString(b[from:to])
+					} else {
+						errHandler(ErrInvalid)
+						return
+					}
+				} else if b[i+1] == 'a' && b[i+2] == '"' {
+					//symbol
+					from, to, i, found = findString(b, i+3)
+					if found {
+						event.BestAskPrice = toString(b[from:to])
+					} else {
+						errHandler(ErrInvalid)
+						return
+					}
+				} else if b[i+1] == 'A' && b[i+2] == '"' {
+					//symbol
+					from, to, i, found = findString(b, i+3)
+					if found {
+						event.BestAskQty = toString(b[from:to])
+					} else {
+						errHandler(ErrInvalid)
+						return
+					}
+				}
+			}
+		}
+
+		handler(event)
+	}
+	return wsServe(cfg, wsHandler, errHandler)
+}
+
+func toString(s []byte) string {
+	return *(*string)(unsafe.Pointer(&s))
+}
+
+func findString(b []byte, off int) (fromIndex, toIndex int, offsetOut int, found bool) {
+
+	for j := off; j < len(b); j++ {
+		if b[j] == ' ' || b[j] == ':' || b[j] == '"' {
+			continue
+		}
+		fromIndex = j
+		break
+	}
+	if fromIndex != -1 {
+		k := 0
+		for j := fromIndex; j < len(b); j++ {
+			if b[j] == '"' {
+				toIndex = j
+				break
+			}
+			k++
+		}
+		if toIndex != -1 {
+			offsetOut = toIndex + 1
+			found = true
+			return
+		}
+	}
+	return
+}
+
 // WsLiquidationOrderEvent define websocket liquidation order event.
 type WsLiquidationOrderEvent struct {
 	Event            string             `json:"e"`
@@ -525,42 +646,199 @@ func WsPartialDepthServeWithRateMulti(symbols []string, levels int, rate time.Du
 
 	endpoint := fmt.Sprintf("%s%s", compWsMainUrl, strings.Join(ss, "/"))
 	cfg := newWsConfig(endpoint)
-	wsHandler := func(message []byte) {
-		j, err := newJSON(message)
-		if err != nil {
-			errHandler(err)
-			return
-		}
-		event := new(WsDepthEvent)
-		j = j.Get("data")
-		event.Event = j.Get("e").MustString()
-		event.Time = j.Get("E").MustInt64()
-		event.TransactionTime = j.Get("T").MustInt64()
-		event.Symbol = j.Get("s").MustString()
-		event.FirstUpdateID = j.Get("U").MustInt64()
-		event.LastUpdateID = j.Get("u").MustInt64()
-		event.PrevLastUpdateID = j.Get("pu").MustInt64()
-		bidsLen := len(j.Get("b").MustArray())
-		event.Bids = make([]Bid, bidsLen)
-		for i := 0; i < bidsLen; i++ {
-			item := j.Get("b").GetIndex(i)
-			event.Bids[i] = Bid{
-				Price:    item.GetIndex(0).MustString(),
-				Quantity: item.GetIndex(1).MustString(),
+	event := &WsDepthEvent{
+		Asks: make([]Ask, levels),
+		Bids: make([]Bid, levels),
+	}
+	valueOut := make([]byte, 10000)
+
+	wsHandler := func(b []byte) {
+
+		valueOutLen := 0
+
+		now := time.Now()
+		found := false
+		for i := 0; i < len(b)-2; i++ {
+			if b[i] == '"' {
+				if b[i+1] == 's' && b[i+2] == '"' {
+					//symbol
+					valueOutLen, i, found = findStringValue(b, i+3, valueOut)
+					if !found {
+						errHandler(ErrInvalid)
+						return
+					}
+					event.Symbol = string(valueOut[:valueOutLen])
+				} else if b[i+1] == 'a' && b[i+2] == '"' {
+					//asks
+					valueOutLen, i, found = findDepthAsk(b, i+3, event.Asks, valueOut)
+					if !found {
+						errHandler(ErrInvalid)
+						return
+					}
+				} else if b[i+1] == 'b' && b[i+2] == '"' {
+					//bids
+					valueOutLen, i, found = findDepthBid(b, i+3, event.Bids, valueOut)
+					if !found {
+						errHandler(ErrInvalid)
+						return
+					}
+				}
 			}
 		}
-		asksLen := len(j.Get("a").MustArray())
-		event.Asks = make([]Ask, asksLen)
-		for i := 0; i < asksLen; i++ {
-			item := j.Get("a").GetIndex(i)
-			event.Asks[i] = Ask{
-				Price:    item.GetIndex(0).MustString(),
-				Quantity: item.GetIndex(1).MustString(),
-			}
+
+		dt := time.Now().Sub(now).Microseconds()
+		if dt > 5 {
+			fmt.Println(dt, event.Symbol)
 		}
+
 		handler(event)
+
+		//j, err := newJSON(message)
+		//if err != nil {
+		//	errHandler(err)
+		//	return
+		//}
+		//event := new(WsDepthEvent)
+		//j = j.Get("data")
+		//event.Event = j.Get("e").MustString()
+		//event.Time = j.Get("E").MustInt64()
+		//event.TransactionTime = j.Get("T").MustInt64()
+		//event.Symbol = j.Get("s").MustString()
+		//event.FirstUpdateID = j.Get("U").MustInt64()
+		//event.LastUpdateID = j.Get("u").MustInt64()
+		//event.PrevLastUpdateID = j.Get("pu").MustInt64()
+		//bidsLen := len(j.Get("b").MustArray())
+		//event.Bids = make([]Bid, bidsLen)
+		//for i := 0; i < bidsLen; i++ {
+		//	item := j.Get("b").GetIndex(i)
+		//	event.Bids[i] = Bid{
+		//		Price:    item.GetIndex(0).MustString(),
+		//		Quantity: item.GetIndex(1).MustString(),
+		//	}
+		//}
+		//asksLen := len(j.Get("a").MustArray())
+		//event.Asks = make([]Ask, asksLen)
+		//for i := 0; i < asksLen; i++ {
+		//	item := j.Get("a").GetIndex(i)
+		//	event.Asks[i] = Ask{
+		//		Price:    item.GetIndex(0).MustString(),
+		//		Quantity: item.GetIndex(1).MustString(),
+		//	}
+		//}
+		//
+		//handler(event)
 	}
 	return wsServe(cfg, wsHandler, errHandler)
+}
+
+func findStringValue(b []byte, off int, valueOut []byte) (valueOutLen int, offsetOut int, found bool) {
+	from := -1
+	to := -1
+	for j := off; j < len(b); j++ {
+		if b[j] == ' ' || b[j] == ':' || b[j] == '"' {
+			continue
+		}
+		from = j
+		break
+	}
+	if from != -1 {
+		k := 0
+		for j := from; j < len(b); j++ {
+			if b[j] == '"' {
+				to = j
+				break
+			}
+			valueOut[valueOutLen] = b[j]
+			valueOutLen++
+			k++
+		}
+		if to != -1 {
+			offsetOut = to + 1
+			found = true
+			return
+		}
+	}
+	return
+}
+
+func findDepthAsk(b []byte, off int, depthOut []Ask, valueOut []byte) (valueOutLen int, offsetOut int, found bool) {
+	from := -1
+	for j := off; j < len(b); j++ {
+		if b[j] == '[' {
+			from = j
+			break
+		}
+	}
+	if from != -1 {
+		left := -1
+		foundX := 0
+		for x := 0; x < len(depthOut); x++ {
+			for j := from + 1; j < len(b); j++ {
+				if b[j] == '[' {
+					left = j
+					break
+				}
+			}
+			if left != -1 {
+				valueOutLen, left, found := findStringValue(b, left+1, valueOut)
+				if found {
+					depthOut[x].Price = string(valueOut[:valueOutLen])
+					valueOutLen, left, found := findStringValue(b, left+1, valueOut)
+					if found {
+						depthOut[x].Quantity = string(valueOut[:valueOutLen])
+						foundX++
+						from = left
+					}
+				}
+			}
+		}
+		if foundX == len(depthOut) {
+			offsetOut = left + 1
+			found = true
+			//fmt.Println(depthOut)
+		}
+	}
+	return
+}
+
+func findDepthBid(b []byte, off int, depthOut []Bid, valueOut []byte) (valueOutLen int, offsetOut int, found bool) {
+	from := -1
+	for j := off; j < len(b); j++ {
+		if b[j] == '[' {
+			from = j
+			break
+		}
+	}
+	if from != -1 {
+		left := -1
+		foundX := 0
+		for x := 0; x < len(depthOut); x++ {
+			for j := from + 1; j < len(b); j++ {
+				if b[j] == '[' {
+					left = j
+					break
+				}
+			}
+			if left != -1 {
+				valueOutLen, left, found := findStringValue(b, left+1, valueOut)
+				if found {
+					depthOut[x].Price = string(valueOut[:valueOutLen])
+					valueOutLen, left, found := findStringValue(b, left+1, valueOut)
+					if found {
+						depthOut[x].Quantity = string(valueOut[:valueOutLen])
+						foundX++
+						from = left
+					}
+				}
+			}
+		}
+		if foundX == len(depthOut) {
+			offsetOut = left + 1
+			found = true
+			//fmt.Println(depthOut)
+		}
+	}
+	return
 }
 
 // WsDiffDepthServe serve websocket diff. depth handler.

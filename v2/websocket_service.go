@@ -2,9 +2,11 @@ package binance
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
+	"unsafe"
 )
 
 // Endpoints
@@ -20,6 +22,8 @@ var (
 	WebsocketTimeout = time.Second * 60
 	// WebsocketKeepalive enables sending ping/pong messages to check the connection stability
 	WebsocketKeepalive = false
+
+	ErrInvalid = errors.New("invalid")
 )
 
 // getWsEndpoint return the base endpoint of the WS according the UseTestnet flag
@@ -501,6 +505,124 @@ func WsBookTickerServe(symbol string, handler WsBookTickerHandler, errHandler Er
 		handler(event)
 	}
 	return wsServe(cfg, wsHandler, errHandler)
+}
+
+type WsBookTickerEventMulti struct {
+	RecvTime     time.Time
+	Symbol       string
+	BestBidPrice string
+	BestBidQty   string
+	BestAskPrice string
+	BestAskQty   string
+}
+
+// WsBookTickerHandler handle websocket that pushes updates to the best bid or ask price or quantity in real-time for a specified symbol.
+type WsBookTickerHandlerMulti func(event *WsBookTickerEventMulti)
+
+func WsBookTickerServeMulti(symbols []string, handler WsBookTickerHandlerMulti, errHandler ErrHandler) (doneC, stopC chan struct{}, err error) {
+	if len(symbols) > 200 {
+		return nil, nil, errors.New("max 200 symbols")
+	}
+
+	var ss []string
+	for _, s := range symbols {
+		ss = append(ss, fmt.Sprintf("%s@bookTicker", strings.ToLower(s)))
+	}
+
+	endpoint := fmt.Sprintf("%s%s", getCombinedEndpoint(), strings.Join(ss, "/"))
+	cfg := newWsConfig(endpoint)
+	wsHandler := func(b []byte) {
+		event := &WsBookTickerEventMulti{
+			RecvTime: time.Now(),
+		}
+
+		var found bool
+		var from, to int
+		for i := 0; i < len(b)-2; i++ {
+			if b[i] == '"' {
+				if b[i+1] == 's' && b[i+2] == '"' {
+					//symbol
+					from, to, i, found = findString(b, i+3)
+					if found {
+						event.Symbol = toString(b[from:to])
+					} else {
+						errHandler(ErrInvalid)
+						return
+					}
+				} else if b[i+1] == 'b' && b[i+2] == '"' {
+					//symbol
+					from, to, i, found = findString(b, i+3)
+					if found {
+						event.BestBidPrice = toString(b[from:to])
+					} else {
+						errHandler(ErrInvalid)
+						return
+					}
+				} else if b[i+1] == 'B' && b[i+2] == '"' {
+					//symbol
+					from, to, i, found = findString(b, i+3)
+					if found {
+						event.BestBidQty = toString(b[from:to])
+					} else {
+						errHandler(ErrInvalid)
+						return
+					}
+				} else if b[i+1] == 'a' && b[i+2] == '"' {
+					//symbol
+					from, to, i, found = findString(b, i+3)
+					if found {
+						event.BestAskPrice = toString(b[from:to])
+					} else {
+						errHandler(ErrInvalid)
+						return
+					}
+				} else if b[i+1] == 'A' && b[i+2] == '"' {
+					//symbol
+					from, to, i, found = findString(b, i+3)
+					if found {
+						event.BestAskQty = toString(b[from:to])
+					} else {
+						errHandler(ErrInvalid)
+						return
+					}
+				}
+			}
+		}
+
+		handler(event)
+	}
+	return wsServe(cfg, wsHandler, errHandler)
+}
+
+func toString(s []byte) string {
+	return *(*string)(unsafe.Pointer(&s))
+}
+
+func findString(b []byte, off int) (fromIndex, toIndex int, offsetOut int, found bool) {
+
+	for j := off; j < len(b); j++ {
+		if b[j] == ' ' || b[j] == ':' || b[j] == '"' {
+			continue
+		}
+		fromIndex = j
+		break
+	}
+	if fromIndex != -1 {
+		k := 0
+		for j := fromIndex; j < len(b); j++ {
+			if b[j] == '"' {
+				toIndex = j
+				break
+			}
+			k++
+		}
+		if toIndex != -1 {
+			offsetOut = toIndex + 1
+			found = true
+			return
+		}
+	}
+	return
 }
 
 // WsAllBookTickerServe serve websocket that pushes updates to the best bid or ask price or quantity in real-time for all symbols.
