@@ -591,7 +591,7 @@ func WsBookTickerServeMulti(symbols []string, handler WsBookTickerHandlerMulti, 
 
 		handler(event)
 	}
-	return wsServe(cfg, wsHandler, errHandler)
+	return wsServe2(cfg, wsHandler, errHandler, make([]byte, 0, 1024*1024))
 }
 
 func toString(s []byte) string {
