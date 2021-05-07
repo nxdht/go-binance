@@ -512,10 +512,7 @@ func WsBookTickerServeMulti(symbols []string, handler WsBookTickerHandlerMulti, 
 	return wsServe2(cfg, wsHandler, errHandler, make([]byte, 0, 1024*1024))
 }
 
-func WsParseBookTickerSymbol(b []byte) *WsBookTickerEventMulti {
-	event := &WsBookTickerEventMulti{
-		RecvTime: time.Now(),
-	}
+func WsParseBookTickerSymbol(b []byte, outEvent *WsBookTickerEventMulti) bool {
 
 	var found bool
 	var from, to int
@@ -527,55 +524,55 @@ func WsParseBookTickerSymbol(b []byte) *WsBookTickerEventMulti {
 				if found {
 					us := toString(b[from:to])
 					u, _ := strconv.Atoi(us)
-					event.Update = int64(u)
+					outEvent.Update = int64(u)
 				} else {
-					return nil
+					return false
 				}
 			} else if b[i+1] == 's' && b[i+2] == '"' {
 				//symbol
 				from, to, i, found = findString(b, i+3)
 				if found {
-					event.Symbol = toString(b[from:to])
+					outEvent.Symbol = toString(b[from:to])
 				} else {
-					return nil
+					return false
 				}
 			} else if b[i+1] == 'b' && b[i+2] == '"' {
 				//bid
 				from, to, i, found = findString(b, i+3)
 				if found {
-					event.BestBidPrice = toString(b[from:to])
+					outEvent.BestBidPrice = toString(b[from:to])
 				} else {
-					return nil
+					return false
 				}
 			} else if b[i+1] == 'B' && b[i+2] == '"' {
 				//bid qty
 				from, to, i, found = findString(b, i+3)
 				if found {
-					event.BestBidQty = toString(b[from:to])
+					outEvent.BestBidQty = toString(b[from:to])
 				} else {
-					return nil
+					return false
 				}
 			} else if b[i+1] == 'a' && b[i+2] == '"' {
 				//ask
 				from, to, i, found = findString(b, i+3)
 				if found {
-					event.BestAskPrice = toString(b[from:to])
+					outEvent.BestAskPrice = toString(b[from:to])
 				} else {
-					return nil
+					return false
 				}
 			} else if b[i+1] == 'A' && b[i+2] == '"' {
 				//ask qty
 				from, to, i, found = findString(b, i+3)
 				if found {
-					event.BestAskQty = toString(b[from:to])
+					outEvent.BestAskQty = toString(b[from:to])
 				} else {
-					return nil
+					return false
 				}
 			}
 		}
 	}
 
-	return event
+	return true
 }
 
 func toString(s []byte) string {
