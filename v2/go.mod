@@ -11,4 +11,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.1.0 // indirect
 	github.com/stretchr/testify v1.2.1
+	github.com/valyala/fasthttp v1.24.0
 )
+
+replace github.com/gorilla/websocket v1.2.0 => ../../websocket

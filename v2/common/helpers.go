@@ -1,6 +1,9 @@
 package common
 
-import "math"
+import (
+	"math"
+	"unsafe"
+)
 import "bytes"
 
 // AmountToLotSize converts an amount to a lot sized amount
@@ -18,4 +21,13 @@ func ToJSONList(v []byte) []byte {
 		return b.Bytes()
 	}
 	return v
+}
+
+func UnsafeToBytes(s string) []byte {
+	return *(*[]byte)(unsafe.Pointer(
+		&struct {
+			string
+			Cap int
+		}{s, len(s)},
+	))
 }

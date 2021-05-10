@@ -2,7 +2,14 @@ package futures
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"github.com/adshao/go-binance/v2/common"
+	"github.com/valyala/fasthttp"
+	"strings"
+	"time"
 )
 
 // CreateOrderService create order
@@ -172,6 +179,108 @@ func (s *CreateOrderService) Do(ctx context.Context, opts ...RequestOption) (res
 	if err != nil {
 		return nil, err
 	}
+	res = new(CreateOrderResponse)
+	err = json.Unmarshal(data, res)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func CreateOrder(c *Client, ctx context.Context, symbol string, side SideType, orderType OrderType, quantity string, newOrderRespType NewOrderRespType) (res *CreateOrderResponse, err error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	if c.Debug {
+		c.debug("/fapi/v1/order")
+	}
+
+	now := time.Now()
+
+	req := fasthttp.AcquireRequest()
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
+
+	req.Header.SetMethod("POST")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-MBX-APIKEY", c.APIKey)
+
+	bodysb := &strings.Builder{}
+	bodysb.WriteString("newOrderRespType=")
+	bodysb.WriteString(string(newOrderRespType))
+	bodysb.WriteString("&quantity=")
+	bodysb.WriteString(quantity)
+	bodysb.WriteString("&side=")
+	bodysb.WriteString(string(side))
+	bodysb.WriteString("&symbol=")
+	bodysb.WriteString(symbol)
+	bodysb.WriteString("&type=")
+	bodysb.WriteString(string(orderType))
+
+	bodyString := bodysb.String()
+	req.SetBodyString(bodyString)
+
+	querysb := &strings.Builder{}
+	querysb.WriteString("timestamp=")
+	querysb.WriteString(fmt.Sprintf("%d", currentTimestamp()-c.TimeOffset))
+
+	queryString := querysb.String()
+
+	raw := fmt.Sprintf("%s%s", queryString, bodyString)
+	mac := hmac.New(sha256.New, c.SecretKeyB)
+	_, err = mac.Write(common.UnsafeToBytes(raw))
+	if err != nil {
+		return nil, err
+	}
+
+	querysb.WriteString(fmt.Sprintf("&signature=%x", mac.Sum(nil)))
+
+	queryString = querysb.String()
+
+	sb := &strings.Builder{}
+	sb.WriteString(c.BaseURL)
+	sb.WriteString("/fapi/v1/order")
+	if queryString != "" {
+		sb.WriteString("?")
+		sb.WriteString(queryString)
+	}
+	req.SetRequestURI(sb.String())
+
+	if c.Debug {
+		c.debug("%d", time.Now().Sub(now).Microseconds())
+	}
+
+	if c.FastHttpClient != nil {
+		err = c.FastHttpClient.Do(req, resp)
+	} else {
+		err = fasthttp.Do(req, resp)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	data := resp.Body()
+
+	if c.Debug {
+		c.debug("response status code: %d", resp.StatusCode())
+		if resp.StatusCode() != 200 {
+			c.debug("response body: %s", string(data))
+		}
+	}
+
+	if resp.StatusCode() >= 400 {
+		apiErr := new(common.APIError)
+		e := json.Unmarshal(data, apiErr)
+		if e != nil {
+			if c.Debug {
+				c.debug("failed to unmarshal json: %s", e)
+			}
+		}
+		return nil, apiErr
+	}
+
 	res = new(CreateOrderResponse)
 	err = json.Unmarshal(data, res)
 	if err != nil {

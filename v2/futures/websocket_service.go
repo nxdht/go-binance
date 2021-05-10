@@ -156,6 +156,27 @@ func WsMarkPriceServeWithRateMulti(symbols []string, rate time.Duration, handler
 	return wsServe2(cfg, wsHandler, errHandler, make([]byte, 0, 1024*1024))
 }
 
+func WsMarkPriceServeWithRateMultiRaw(symbols []string, rate time.Duration, handler func([]byte), errHandler ErrHandler) (doneC, stopC chan struct{}, err error) {
+	var rateStr string
+	switch rate {
+	case 3 * time.Second:
+		rateStr = ""
+	case 1 * time.Second:
+		rateStr = "@1s"
+	default:
+		return nil, nil, errors.New("Invalid rate")
+	}
+	var ss []string
+	for _, s := range symbols {
+		ss = append(ss, fmt.Sprintf("%s@markPrice%s", strings.ToLower(s), rateStr))
+	}
+
+	endpoint := fmt.Sprintf("%s%s", compWsMainUrl, strings.Join(ss, "/"))
+	cfg := newWsConfig(endpoint)
+
+	return wsServe2(cfg, handler, errHandler, make([]byte, 0, 1024*1024))
+}
+
 // WsAllMarkPriceEvent defines an array of websocket markPriceUpdate events.
 type WsAllMarkPriceEvent []*WsMarkPriceEvent
 
