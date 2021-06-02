@@ -859,6 +859,65 @@ func WsPartialDepthServeWithRateMulti(symbols []string, levels int, rate time.Du
 	return wsServe(cfg, wsHandler, errHandler)
 }
 
+func WsPartialDepthServeWithRateMultiRaw(symbols []string, levels int, rate time.Duration, handler func([]byte), errHandler ErrHandler) (doneC, stopC chan struct{}, err error) {
+	if levels != 5 && levels != 10 && levels != 20 {
+		return nil, nil, errors.New("Invalid levels")
+	}
+	levelsStr := fmt.Sprintf("%d", levels)
+
+	var rateStr string
+	switch rate {
+	case 250 * time.Millisecond:
+		rateStr = ""
+	case 500 * time.Millisecond:
+		rateStr = "@500ms"
+	case 100 * time.Millisecond:
+		rateStr = "@100ms"
+	default:
+		return nil, nil, errors.New("Invalid rate")
+	}
+
+	if len(symbols) > 200 {
+		return nil, nil, errors.New("max 200 symbols")
+	}
+
+	var ss []string
+	for _, s := range symbols {
+		ss = append(ss, fmt.Sprintf("%s@depth%s%s", strings.ToLower(s), levelsStr, rateStr))
+	}
+
+	endpoint := fmt.Sprintf("%s%s", compWsMainUrl, strings.Join(ss, "/"))
+	cfg := newWsConfig(endpoint)
+	return wsServe2(cfg, handler, errHandler, make([]byte, 0, 1024*1024))
+}
+
+func WsDiffDepthServeWithRateMultiRaw(symbols []string, rate time.Duration, handler func([]byte), errHandler ErrHandler) (doneC, stopC chan struct{}, err error) {
+	var rateStr string
+	switch rate {
+	case 250 * time.Millisecond:
+		rateStr = ""
+	case 500 * time.Millisecond:
+		rateStr = "@500ms"
+	case 100 * time.Millisecond:
+		rateStr = "@100ms"
+	default:
+		return nil, nil, errors.New("Invalid rate")
+	}
+
+	if len(symbols) > 200 {
+		return nil, nil, errors.New("max 200 symbols")
+	}
+
+	var ss []string
+	for _, s := range symbols {
+		ss = append(ss, fmt.Sprintf("%s@depth%s", strings.ToLower(s), rateStr))
+	}
+
+	endpoint := fmt.Sprintf("%s%s", compWsMainUrl, strings.Join(ss, "/"))
+	cfg := newWsConfig(endpoint)
+	return wsServe2(cfg, handler, errHandler, make([]byte, 0, 1024*1024))
+}
+
 func findStringValue(b []byte, off int, valueOut []byte) (valueOutLen int, offsetOut int, found bool) {
 	from := -1
 	to := -1

@@ -157,7 +157,7 @@ func (s *CreateOrderService) Test(ctx context.Context, opts ...RequestOption) (e
 	return err
 }
 
-func CreateOrder(c *Client, ctx context.Context, symbol string, side SideType, orderType OrderType, quantity string) (res *CreateOrderResponse, err error) {
+func CreateOrder(c *Client, ctx context.Context, symbol string, side SideType, orderType OrderType, tifType TimeInForceType, quantity string, price string) (res *CreateOrderResponse, err error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -178,12 +178,23 @@ func CreateOrder(c *Client, ctx context.Context, symbol string, side SideType, o
 	req.Header.Set("X-MBX-APIKEY", c.APIKey)
 
 	bodysb := &strings.Builder{}
-	bodysb.WriteString("&quantity=")
-	bodysb.WriteString(quantity)
+	if orderType == OrderTypeLimit || orderType == OrderTypeStopLossLimit || orderType == OrderTypeTakeProfitLimit {
+		bodysb.WriteString("price=")
+		bodysb.WriteString(price)
+		bodysb.WriteString("&quantity=")
+		bodysb.WriteString(quantity)
+	} else {
+		bodysb.WriteString("quantity=")
+		bodysb.WriteString(quantity)
+	}
 	bodysb.WriteString("&side=")
 	bodysb.WriteString(string(side))
 	bodysb.WriteString("&symbol=")
 	bodysb.WriteString(symbol)
+	if orderType == OrderTypeLimit || orderType == OrderTypeStopLossLimit || orderType == OrderTypeTakeProfitLimit {
+		bodysb.WriteString("&timeInForce=")
+		bodysb.WriteString(string(tifType))
+	}
 	bodysb.WriteString("&type=")
 	bodysb.WriteString(string(orderType))
 

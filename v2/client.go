@@ -607,6 +607,11 @@ func (c *Client) NewMarginTransferService() *MarginTransferService {
 	return &MarginTransferService{c: c}
 }
 
+// NewMarginTransferService init margin account transfer service
+func (c *Client) NewMarginIsolatedTransferService() *MarginIsolatedTransferService {
+	return &MarginIsolatedTransferService{c: c}
+}
+
 // NewMarginLoanService init margin account loan service
 func (c *Client) NewMarginLoanService() *MarginLoanService {
 	return &MarginLoanService{c: c}
@@ -665,6 +670,10 @@ func (c *Client) NewGetMarginPairService() *GetMarginPairService {
 // NewGetMarginAllPairsService init get margin all pairs service
 func (c *Client) NewGetMarginAllPairsService() *GetMarginAllPairsService {
 	return &GetMarginAllPairsService{c: c}
+}
+
+func (c *Client) NewGetMarginIsolatedAllPairsService() *GetMarginIsolatedAllPairsService {
+	return &GetMarginIsolatedAllPairsService{c: c}
 }
 
 // NewGetMarginPriceIndexService init get margin price index service

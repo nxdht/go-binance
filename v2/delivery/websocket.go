@@ -6,6 +6,10 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+var DefaultDialer = &websocket.Dialer{
+	HandshakeTimeout: 10 * time.Second,
+}
+
 // WsHandler handle raw websocket message
 type WsHandler func(message []byte)
 
@@ -24,7 +28,7 @@ func newWsConfig(endpoint string) *WsConfig {
 }
 
 var wsServe = func(cfg *WsConfig, handler WsHandler, errHandler ErrHandler) (doneC, stopC chan struct{}, err error) {
-	c, _, err := websocket.DefaultDialer.Dial(cfg.Endpoint, nil)
+	c, _, err := DefaultDialer.Dial(cfg.Endpoint, nil)
 	if err != nil {
 		return nil, nil, err
 	}

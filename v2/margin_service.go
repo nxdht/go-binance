@@ -7,6 +7,67 @@ import (
 )
 
 // MarginTransferService transfer between spot account and margin account
+type MarginIsolatedTransferService struct {
+	c         *Client
+	asset     string
+	amount    string
+	symbol    string
+	transFrom string
+	transTo   string
+}
+
+// Asset set asset being transferred, e.g., BTC
+func (s *MarginIsolatedTransferService) Asset(asset string) *MarginIsolatedTransferService {
+	s.asset = asset
+	return s
+}
+
+// Amount the amount to be transferred
+func (s *MarginIsolatedTransferService) Amount(amount string) *MarginIsolatedTransferService {
+	s.amount = amount
+	return s
+}
+
+func (s *MarginIsolatedTransferService) Symbol(symbol string) *MarginIsolatedTransferService {
+	s.symbol = symbol
+	return s
+}
+
+// Type 1: transfer from main account to margin account 2: transfer from margin account to main account
+func (s *MarginIsolatedTransferService) Type(from, to string) *MarginIsolatedTransferService {
+	s.transFrom = from
+	s.transTo = to
+	return s
+}
+
+// Do send request
+func (s *MarginIsolatedTransferService) Do(ctx context.Context, opts ...RequestOption) (res *TransactionResponse, err error) {
+	r := &request{
+		method:   "POST",
+		endpoint: "/sapi/v1/margin/isolated/transfer",
+		secType:  secTypeSigned,
+	}
+	m := params{
+		"asset":     s.asset,
+		"amount":    s.amount,
+		"symbol":    s.symbol,
+		"transFrom": s.transFrom,
+		"transTo":   s.transTo,
+	}
+	r.setFormParams(m)
+	res = new(TransactionResponse)
+	data, err := s.c.callAPI(ctx, r, opts...)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(data, res)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// MarginTransferService transfer between spot account and margin account
 type MarginTransferService struct {
 	c            *Client
 	asset        string
@@ -574,6 +635,30 @@ func (s *GetMarginAllPairsService) Do(ctx context.Context, opts ...RequestOption
 	return res, nil
 }
 
+// GetMarginAllPairsService get margin pair info
+type GetMarginIsolatedAllPairsService struct {
+	c *Client
+}
+
+// Do send request
+func (s *GetMarginIsolatedAllPairsService) Do(ctx context.Context, opts ...RequestOption) (res []*MarginAllPair, err error) {
+	r := &request{
+		method:   "GET",
+		endpoint: "/sapi/v1/margin/isolated/allPairs",
+		secType:  secTypeAPIKey,
+	}
+	data, err := s.c.callAPI(ctx, r, opts...)
+	if err != nil {
+		return []*MarginAllPair{}, err
+	}
+	res = make([]*MarginAllPair, 0)
+	err = json.Unmarshal(data, &res)
+	if err != nil {
+		return []*MarginAllPair{}, err
+	}
+	return res, nil
+}
+
 // MarginAllPair define margin pair info
 type MarginAllPair struct {
 	ID            int64  `json:"id"`
@@ -708,13 +793,19 @@ func (s *ListMarginTradesService) Do(ctx context.Context, opts ...RequestOption)
 
 // GetMaxBorrowableService get max borrowable of asset
 type GetMaxBorrowableService struct {
-	c     *Client
-	asset string
+	c              *Client
+	asset          string
+	isolatedSymbol string
 }
 
 // Asset set asset
 func (s *GetMaxBorrowableService) Asset(asset string) *GetMaxBorrowableService {
 	s.asset = asset
+	return s
+}
+
+func (s *GetMaxBorrowableService) IsolatedSymbol(symbol string) *GetMaxBorrowableService {
+	s.isolatedSymbol = symbol
 	return s
 }
 
@@ -726,6 +817,9 @@ func (s *GetMaxBorrowableService) Do(ctx context.Context, opts ...RequestOption)
 		secType:  secTypeSigned,
 	}
 	r.setParam("asset", s.asset)
+	if len(s.isolatedSymbol) != 0 {
+		r.setParam("isolatedSymbol", s.isolatedSymbol)
+	}
 	data, err := s.c.callAPI(ctx, r, opts...)
 	if err != nil {
 		return nil, err
@@ -745,13 +839,19 @@ type MaxBorrowable struct {
 
 // GetMaxTransferableService get max transferable of asset
 type GetMaxTransferableService struct {
-	c     *Client
-	asset string
+	c              *Client
+	asset          string
+	isolatedSymbol string
 }
 
 // Asset set asset
 func (s *GetMaxTransferableService) Asset(asset string) *GetMaxTransferableService {
 	s.asset = asset
+	return s
+}
+
+func (s *GetMaxTransferableService) IsolatedSymbol(symbol string) *GetMaxTransferableService {
+	s.isolatedSymbol = symbol
 	return s
 }
 
@@ -763,6 +863,9 @@ func (s *GetMaxTransferableService) Do(ctx context.Context, opts ...RequestOptio
 		secType:  secTypeSigned,
 	}
 	r.setParam("asset", s.asset)
+	if len(s.isolatedSymbol) != 0 {
+		r.setParam("isolatedSymbol", s.isolatedSymbol)
+	}
 	data, err := s.c.callAPI(ctx, r, opts...)
 	if err != nil {
 		return nil, err

@@ -109,6 +109,21 @@ func WsCombinedPartialDepthServe100Ms(symbolLevels map[string]string, handler Ws
 	return WsCombinedPartialDepthServe(temp, handler, errHandler)
 }
 
+func WsCombinedPartialDepthServe100MsRaw(symbolLevels map[string]string, handler func([]byte), errHandler ErrHandler) (doneC, stopC chan struct{}, err error) {
+	temp := make(map[string]string)
+	for k, v := range symbolLevels {
+		temp[k] = v + "@100ms"
+	}
+
+	endpoint := getCombinedEndpoint()
+	for s, l := range temp {
+		endpoint += fmt.Sprintf("%s@depth%s", strings.ToLower(s), l) + "/"
+	}
+	endpoint = endpoint[:len(endpoint)-1]
+	cfg := newWsConfig(endpoint)
+	return wsServe2(cfg, handler, errHandler, make([]byte, 0, 1024*1024))
+}
+
 // WsCombinedPartialDepthServe is similar to WsPartialDepthServe, but it for multiple symbols
 func WsCombinedPartialDepthServe(symbolLevels map[string]string, handler WsPartialDepthHandler, errHandler ErrHandler) (doneC, stopC chan struct{}, err error) {
 
@@ -152,6 +167,16 @@ func WsCombinedPartialDepthServe(symbolLevels map[string]string, handler WsParti
 		handler(event)
 	}
 	return wsServe(cfg, wsHandler, errHandler)
+}
+
+func WsCombinedDiffDepthServe100MsRaw(symbols []string, handler func([]byte), errHandler ErrHandler) (doneC, stopC chan struct{}, err error) {
+	endpoint := getCombinedEndpoint()
+	for _, s := range symbols {
+		endpoint += fmt.Sprintf("%s@depth@100ms", strings.ToLower(s)) + "/"
+	}
+	endpoint = endpoint[:len(endpoint)-1]
+	cfg := newWsConfig(endpoint)
+	return wsServe2(cfg, handler, errHandler, make([]byte, 0, 1024*1024))
 }
 
 // WsDepthHandler handle websocket depth event
