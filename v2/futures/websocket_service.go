@@ -15,7 +15,8 @@ const (
 	baseWsMainUrl    = "wss://fstream.binance.com/ws"
 	baseWsTestnetUrl = "wss://stream.binancefuture.com/ws"
 
-	compWsMainUrl = "wss://fstream.binance.com/stream?streams="
+	compWsMainUrl    = "wss://fstream.binance.com/stream?streams="
+	compWsTestnetUrl = "wss://stream.binancefuture.com/stream?streams="
 )
 
 var (
@@ -35,6 +36,13 @@ func getWsEndpoint() string {
 		return baseWsTestnetUrl
 	}
 	return baseWsMainUrl
+}
+
+func getCompWsEndpoint() string {
+	if UseTestnet {
+		return compWsTestnetUrl
+	}
+	return compWsMainUrl
 }
 
 // WsAggTradeEvent define websocket aggTrde event.
@@ -134,7 +142,7 @@ func WsMarkPriceServeWithRateMulti(symbols []string, rate time.Duration, handler
 		ss = append(ss, fmt.Sprintf("%s@markPrice%s", strings.ToLower(s), rateStr))
 	}
 
-	endpoint := fmt.Sprintf("%s%s", compWsMainUrl, strings.Join(ss, "/"))
+	endpoint := fmt.Sprintf("%s%s", getCompWsEndpoint(), strings.Join(ss, "/"))
 	cfg := newWsConfig(endpoint)
 	wsHandler := func(message []byte) {
 		j, err := newJSON(message)
@@ -171,7 +179,7 @@ func WsMarkPriceServeWithRateMultiRaw(symbols []string, rate time.Duration, hand
 		ss = append(ss, fmt.Sprintf("%s@markPrice%s", strings.ToLower(s), rateStr))
 	}
 
-	endpoint := fmt.Sprintf("%s%s", compWsMainUrl, strings.Join(ss, "/"))
+	endpoint := fmt.Sprintf("%s%s", getCompWsEndpoint(), strings.Join(ss, "/"))
 	cfg := newWsConfig(endpoint)
 
 	return wsServe2(cfg, handler, errHandler, make([]byte, 0, 1024*1024))
@@ -453,7 +461,7 @@ func WsBookTickerServeMultiRaw(symbols []string, handler func([]byte), errHandle
 		ss = append(ss, fmt.Sprintf("%s@bookTicker", strings.ToLower(s)))
 	}
 
-	endpoint := fmt.Sprintf("%s%s", compWsMainUrl, strings.Join(ss, "/"))
+	endpoint := fmt.Sprintf("%s%s", getCompWsEndpoint(), strings.Join(ss, "/"))
 	cfg := newWsConfig(endpoint)
 	return wsServe2(cfg, handler, errHandler, make([]byte, 0, 1024*1024))
 }
@@ -468,7 +476,7 @@ func WsBookTickerServeMulti(symbols []string, handler WsBookTickerHandlerMulti, 
 		ss = append(ss, fmt.Sprintf("%s@bookTicker", strings.ToLower(s)))
 	}
 
-	endpoint := fmt.Sprintf("%s%s", compWsMainUrl, strings.Join(ss, "/"))
+	endpoint := fmt.Sprintf("%s%s", getCompWsEndpoint(), strings.Join(ss, "/"))
 	cfg := newWsConfig(endpoint)
 	wsHandler := func(b []byte) {
 		event := &WsBookTickerEventMulti{
@@ -772,7 +780,7 @@ func WsPartialDepthServeWithRateMulti(symbols []string, levels int, rate time.Du
 		ss = append(ss, fmt.Sprintf("%s@depth%s%s", strings.ToLower(s), levelsStr, rateStr))
 	}
 
-	endpoint := fmt.Sprintf("%s%s", compWsMainUrl, strings.Join(ss, "/"))
+	endpoint := fmt.Sprintf("%s%s", getCompWsEndpoint(), strings.Join(ss, "/"))
 	cfg := newWsConfig(endpoint)
 	event := &WsDepthEvent{
 		Asks: make([]Ask, levels),
@@ -886,7 +894,7 @@ func WsPartialDepthServeWithRateMultiRaw(symbols []string, levels int, rate time
 		ss = append(ss, fmt.Sprintf("%s@depth%s%s", strings.ToLower(s), levelsStr, rateStr))
 	}
 
-	endpoint := fmt.Sprintf("%s%s", compWsMainUrl, strings.Join(ss, "/"))
+	endpoint := fmt.Sprintf("%s%s", getCompWsEndpoint(), strings.Join(ss, "/"))
 	cfg := newWsConfig(endpoint)
 	return wsServe2(cfg, handler, errHandler, make([]byte, 0, 1024*1024))
 }
@@ -913,7 +921,7 @@ func WsDiffDepthServeWithRateMultiRaw(symbols []string, rate time.Duration, hand
 		ss = append(ss, fmt.Sprintf("%s@depth%s", strings.ToLower(s), rateStr))
 	}
 
-	endpoint := fmt.Sprintf("%s%s", compWsMainUrl, strings.Join(ss, "/"))
+	endpoint := fmt.Sprintf("%s%s", getCompWsEndpoint(), strings.Join(ss, "/"))
 	cfg := newWsConfig(endpoint)
 	return wsServe2(cfg, handler, errHandler, make([]byte, 0, 1024*1024))
 }

@@ -645,7 +645,7 @@ func (s *GetMarginIsolatedAllPairsService) Do(ctx context.Context, opts ...Reque
 	r := &request{
 		method:   "GET",
 		endpoint: "/sapi/v1/margin/isolated/allPairs",
-		secType:  secTypeAPIKey,
+		secType:  secTypeSigned,
 	}
 	data, err := s.c.callAPI(ctx, r, opts...)
 	if err != nil {

@@ -187,7 +187,7 @@ func (s *CreateOrderService) Do(ctx context.Context, opts ...RequestOption) (res
 	return res, nil
 }
 
-func CreateOrder(c *Client, ctx context.Context, symbol string, side SideType, orderType OrderType, tifType TimeInForceType, quantity string, price string, newOrderRespType NewOrderRespType) (res *CreateOrderResponse, err error) {
+func CreateOrder(c *Client, ctx context.Context, symbol string, side SideType, orderType OrderType, positionSide PositionSideType, tifType TimeInForceType, quantity string, price string, newOrderRespType NewOrderRespType) (res *CreateOrderResponse, err error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -210,6 +210,10 @@ func CreateOrder(c *Client, ctx context.Context, symbol string, side SideType, o
 	bodysb := &strings.Builder{}
 	bodysb.WriteString("newOrderRespType=")
 	bodysb.WriteString(string(newOrderRespType))
+	if positionSide != PositionSideTypeBoth {
+		bodysb.WriteString("&positionSide=")
+		bodysb.WriteString(string(positionSide))
+	}
 	if orderType == OrderTypeLimit {
 		bodysb.WriteString("&price=")
 		bodysb.WriteString(price)
