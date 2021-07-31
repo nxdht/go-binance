@@ -12,11 +12,13 @@ import (
 
 // Endpoints
 const (
-	baseWsMainUrl    = "wss://fstream.binance.com/ws"
-	baseWsTestnetUrl = "wss://stream.binancefuture.com/ws"
+	baseWsMainUrlWhiteList = "wss://fstream-a.binance.com/ws"
+	baseWsMainUrl          = "wss://fstream.binance.com/ws"
+	baseWsTestnetUrl       = "wss://stream.binancefuture.com/ws"
 
-	compWsMainUrl    = "wss://fstream.binance.com/stream?streams="
-	compWsTestnetUrl = "wss://stream.binancefuture.com/stream?streams="
+	compWsMainUrlWhiteList = "wss://fstream-a.binance.com/stream?streams="
+	compWsMainUrl          = "wss://fstream.binance.com/stream?streams="
+	compWsTestnetUrl       = "wss://stream.binancefuture.com/stream?streams="
 )
 
 var (
@@ -27,6 +29,9 @@ var (
 	// UseTestnet switch all the WS streams from production to the testnet
 	UseTestnet = false
 
+	FutureFAPIUseWhiteListAPI = false
+	FutureWSUseWhiteListAPI   = false
+
 	ErrInvalid = errors.New("invalid")
 )
 
@@ -35,12 +40,18 @@ func getWsEndpoint() string {
 	if UseTestnet {
 		return baseWsTestnetUrl
 	}
+	if FutureWSUseWhiteListAPI {
+		return baseWsMainUrlWhiteList
+	}
 	return baseWsMainUrl
 }
 
 func getCompWsEndpoint() string {
 	if UseTestnet {
 		return compWsTestnetUrl
+	}
+	if FutureWSUseWhiteListAPI {
+		return compWsMainUrlWhiteList
 	}
 	return compWsMainUrl
 }

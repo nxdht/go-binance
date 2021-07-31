@@ -68,8 +68,9 @@ type UserDataEventReasonType string
 
 // Endpoints
 const (
-	baseApiMainUrl    = "https://fapi.binance.com"
-	baseApiTestnetUrl = "https://testnet.binancefuture.com"
+	baseApiMainUrlWhiteList = "https://fapi5.binance.com"
+	baseApiMainUrl          = "https://fapi.binance.com"
+	baseApiTestnetUrl       = "https://testnet.binancefuture.com"
 )
 
 // Global enums
@@ -185,6 +186,9 @@ func newJSON(data []byte) (j *simplejson.Json, err error) {
 func getApiEndpoint() string {
 	if UseTestnet {
 		return baseApiTestnetUrl
+	}
+	if FutureFAPIUseWhiteListAPI {
+		return baseApiMainUrlWhiteList
 	}
 	return baseApiMainUrl
 }
